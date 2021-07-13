@@ -10,7 +10,9 @@ namespace BOIPayment
     {
         static void Main(string[] args)
         {
-            new PaymentProcessor().DoTest();
+            var processor = new PaymentProcessor();
+            processor.Test_Report();
+            Console.ReadLine();
         }
     }
 }

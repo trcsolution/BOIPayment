@@ -10,14 +10,248 @@ namespace BOIPayment
 {
     public class PaymentProcessor
     {
-
-
-        public void DoTest()
+        enum enConnectionType { TCP=0,Serial=1};
+        enConnectionType _connectionType = enConnectionType.TCP;
+        string _ipAddress;
+        uint _timeout;
+        string _comAddress;
+        comm_SerialDataMode _serialDataMode;
+        ushort _port;
+        comm_SerialBaudrate _serailboundRate;
+        public PaymentProcessor()
         {
-            // Info screen (blocking) – custom message
+            _ipAddress = "192.168.0.234";
+            _connectionType = enConnectionType.TCP;
+            _port = 3000;
+            _timeout = 2000;
+        }
+        public PaymentProcessor(string IPAddress,ushort port,uint timeout)
+        {
+            _ipAddress = IPAddress;
+            _connectionType = enConnectionType.TCP;
+            _port = port;
+            _timeout = timeout;
+        }
+        public PaymentProcessor(string comAddress, comm_SerialDataMode serialDataMode,comm_SerialBaudrate serailboundRate,uint timeout)
+        {
+            _connectionType = enConnectionType.Serial;
+            _comAddress = comAddress;
+            _serialDataMode = serialDataMode;
+            _serailboundRate = serailboundRate;
+            _timeout = timeout;
+            
+        }
+        public bool WaitForReady(Action<string> onError,Action<ecr_terminalStatus> onGetStatus)
+        {
+            var status = EcrLib.getTerminalStatus();
+            
+            if (ecr_status.ECR_OK != status)
+            {
+                onError($"{status}");
+                return false;
+            }
+            ecr_terminalStatus terminalStatus = ecr_terminalStatus.STATUS_UNKNOWN;
 
-            // callbacks initialization
-            // questions (MANDATORY)
+            while (terminalStatus == ecr_terminalStatus.STATUS_UNKNOWN
+                || terminalStatus == ecr_terminalStatus.STATUS_RECON_NEEDED
+                || terminalStatus == ecr_terminalStatus.STATUS_BATCH_COMPLETED
+                || terminalStatus == ecr_terminalStatus.STATUS_APP_ERROR
+                || terminalStatus == ecr_terminalStatus.STATUS_BUSY
+                || terminalStatus == ecr_terminalStatus.STATUS_UNKNOWN)
+             {
+                status = EcrLib.readTerminalStatus(out terminalStatus);
+                if (ecr_status.ECR_OK != status)
+                {
+                    onError($"{status}");
+                    return false;
+                }
+
+                if (terminalStatus == ecr_terminalStatus.STATUS_BATCH_COMPLETED)
+                    onGetStatus(terminalStatus);
+
+
+
+                System.Threading.Thread.Sleep(1000);
+            }
+            return terminalStatus == ecr_terminalStatus.STATUS_READY_FOR_NEW_TRAN;
+        }
+
+
+        public bool Init(Action<string> onError)
+        {
+            var status = EcrLibrary.EcrLib.initialize();
+            if (ecr_status.ECR_OK != status)
+            {
+                onError($"{status}");
+                return false;
+            }
+            EcrLibrary.EcrLib.setProtocol(ecr_communicationProtocol.PROTOCOL_ESERVICE);
+
+            if(_connectionType == enConnectionType.Serial)
+                status = EcrLib.setSerialLink(this._comAddress,this._serialDataMode, this._serailboundRate, this._timeout);
+            else
+                status = EcrLib.setTcpIpLink(this._ipAddress, this._port,this._timeout);
+            if (ecr_status.ECR_OK != status)
+            {
+                onError($"{status}");
+                return false;
+            }
+
+            status = EcrLib.setCashRegisterId(new byte[] { 0x31 });
+            if (ecr_status.ECR_OK != status)
+            {
+                onError($"{status}");
+                return false;
+            }
+            return ecr_status.ECR_OK == status;
+        }
+        
+        
+        public void Test_Payment()
+        {
+            SetCallBackFUnctions();
+            if (!Init((error) => Console.WriteLine(error)))
+                return;
+
+            if (WaitForReady((error) =>
+            {
+                Console.WriteLine(error);
+
+            }, (_status) =>
+            {
+                //status == ecr_terminalStatus.STATUS_BATCH_COMPLETED)
+                Console.WriteLine($"{_status}");
+                
+            }));
+
+        }
+        public void Test_Report()
+        {
+            SetCallBackFUnctions();
+            if (!Init((error) => Console.WriteLine(error)))
+                return;
+
+            ecr_status status = EcrLib.setResetReport(true);
+            if (ecr_status.ECR_OK != status)
+            {
+                Console.WriteLine($"{status}");
+
+                // show error screen
+                return;
+            }
+            status = EcrLib.generateReport();
+            if (ecr_status.ECR_OK != status)
+            {
+                Console.WriteLine($"{status}");
+                // show error screen
+                return;
+            }
+        }
+
+        //public void DoTest()
+        //{
+            
+        //    return;
+
+        //    var status = EcrLibrary.EcrLib.initialize();
+
+        //    if (ecr_status.ECR_OK != status)
+        //    {
+        //        // error during library initialization -> show error screen
+        //        return;
+        //    }
+        //    EcrLibrary.EcrLib.setProtocol(ecr_communicationProtocol.PROTOCOL_ESERVICE);
+
+
+        //    // 3. Set medium configuration
+        //    // parameters: IP, port, timeout (ms)
+        //    status = EcrLib.setTcpIpLink("192.168.0.234", 3000, 2000);
+        //    if (ecr_status.ECR_OK != status)
+        //    {
+        //        // show error screen
+        //        return;
+        //    }
+
+        //    // set TCP/IP (see 4.1.3) or RS-232 (see 4.1.4) configuration
+        //    // 4. Set cash register number (for example - to value ‘1’)
+        //    status = EcrLib.setCashRegisterId(new byte[] { 0x31 });
+        //    if (ecr_status.ECR_OK != status)
+        //    {
+        //        // error during library initialization -> show error screen
+        //        return;
+        //    }
+        //    // 5. Set handling terminal requests - possible values:
+        //    // REQUESTS_HANDLE_CHOSEN_BY_TERMINAL – terminal decides about given question location
+        //    // REQUESTS_HANDLE_ALL – all questions presented on cash register
+        //    // REQUESTS_HANDLE_NONE – all questions presented on terminal
+        //    ecr_HandlingTerminalRequestsMode mode = ecr_HandlingTerminalRequestsMode.REQUESTS_HANDLE_CHOSEN_BY_TERMINAL;
+
+        //    status = EcrLib.setHandleTerminalRequests(mode);
+        //    if (ecr_status.ECR_OK != status)
+        //    {
+        //        // error during library initialization -> show error screen
+        //        return;
+        //    }
+
+        //    // 1. Get status
+        //    status = EcrLib.getTerminalStatus();
+        //    if (ecr_status.ECR_OK != status)
+        //    {
+        //        // might be a problem with connection to terminal -> show error screen
+        //        return;
+        //    }
+
+        //    // 2. Read status
+        //    ecr_terminalStatus terminalStatus = ecr_terminalStatus.STATUS_UNKNOWN;
+        //    status = EcrLib.readTerminalStatus(out terminalStatus);
+
+        //    if (ecr_status.ECR_OK != status)
+        //    {
+        //        // unexpected error -> show error screen
+        //        return;
+        //    }
+
+        //    //{
+
+        //    //}
+
+
+        //    Console.WriteLine("STart payment");
+
+
+
+        //    status = EcrLib.setTransactionType(ecr_transactionType.TRANS_TEST_CONNECTION);
+        //    if (ecr_status.ECR_OK != status)
+        //    {
+        //        // show error screen
+        //        return;
+        //    }
+        //    // 3. Start operation
+        //    status = EcrLib.startTransaction();
+        //    if (ecr_status.ECR_OK != status)
+        //    {
+        //        // show error screen
+        //        return;
+        //    }
+
+        //    // 4. Read operation result
+        //    ecr_transactionResult result;
+        //    status = EcrLib.readTransactionResult(out result);
+        //    if (ecr_status.ECR_OK != status)
+        //    {
+        //        // no information about operation result - show error screen
+        //        return;
+        //    }
+
+
+
+
+
+
+        //}
+
+        private void SetCallBackFUnctions()
+        {
             Callbacks.cb_setSignatureRequest(askForSignature);
             Callbacks.cb_setCopyRequest(askForCopy);
             Callbacks.cb_setShowYesNoScreen(showYesNoScreen);
@@ -43,51 +277,8 @@ namespace BOIPayment
             Callbacks.cb_setHandleBusLog(handleBusLog);
             Callbacks.cb_setHandleDevLog(handleDevLog);
             Callbacks.cb_setHandleCommLog(handleCommLog);
-
-            var status = EcrLibrary.EcrLib.initialize();
-
-            if (ecr_status.ECR_OK != status)
-            {
-                // error during library initialization -> show error screen
-                return;
-            }
-            EcrLibrary.EcrLib.setProtocol(ecr_communicationProtocol.PROTOCOL_ESERVICE);
-
-
-            // 3. Set medium configuration
-            // parameters: IP, port, timeout (ms)
-            status = EcrLib.setTcpIpLink("10.11.12.13", 3000, 2000);
-            if (ecr_status.ECR_OK != status)
-            {
-                // show error screen
-                return;
-            }
-
-            // set TCP/IP (see 4.1.3) or RS-232 (see 4.1.4) configuration
-            // 4. Set cash register number (for example - to value ‘1’)
-            status = EcrLib.setCashRegisterId(new byte[] { 0x31 });
-            if (ecr_status.ECR_OK != status)
-            {
-                // error during library initialization -> show error screen
-                return;
-            }
-            // 5. Set handling terminal requests - possible values:
-            // REQUESTS_HANDLE_CHOSEN_BY_TERMINAL – terminal decides about given question location
-            // REQUESTS_HANDLE_ALL – all questions presented on cash register
-            // REQUESTS_HANDLE_NONE – all questions presented on terminal
-            ecr_HandlingTerminalRequestsMode mode = ecr_HandlingTerminalRequestsMode.REQUESTS_HANDLE_CHOSEN_BY_TERMINAL;
-                
-            status = EcrLib.setHandleTerminalRequests(mode);
-            if (ecr_status.ECR_OK != status)
-            {
-                // error during library initialization -> show error screen
-                return;
-            }
-
-
-
-
         }
+
         private void showOkScreen(string prompt)
         {
             // “displayPromptScreenOK” – GUI function provided by the integrator (with OK button)
