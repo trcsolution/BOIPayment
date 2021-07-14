@@ -131,7 +131,16 @@ namespace BOIPayment
             if (!Init((error) => Console.WriteLine(error)))
                 return;
 
-            ecr_status status = EcrLib.setResetReport(true);
+            ecr_status status = EcrLib.getBatchSummary();
+            if (ecr_status.ECR_OK != status)
+            {
+                Console.WriteLine($"{status}");
+
+                // show error screen
+                return;
+            }
+
+            status = EcrLib.setResetReport(true);
             if (ecr_status.ECR_OK != status)
             {
                 Console.WriteLine($"{status}");
