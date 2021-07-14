@@ -11,8 +11,8 @@ namespace BOIPayment
         static void Main(string[] args)
         {
             var processor = new PaymentProcessor();
-            //processor.Test_Payment();
-            processor.Test_Report();
+            processor.Test_Payment();
+            //processor.Test_Report();
             Console.ReadLine();
         }
     }
